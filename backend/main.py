@@ -72,6 +72,20 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Verify JWT token from Authorization header"""
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+def optional_verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[dict]:
+    """Optional token verification - returns None if no token provided"""
+    if not credentials:
+        return None
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -169,30 +183,55 @@ async def get_current_user(payload: dict = Depends(verify_token)):
 
 # Chat Endpoints
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(message: ChatMessage, payload: dict = Depends(verify_token)):
+async def chat(message: ChatMessage, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Chat endpoint - requires authentication"""
     try:
-        from rag_engine import get_rag_agent
+        # Verify token to get user_id
+        try:
+            token = credentials.credentials
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get('user_id')
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token expired")
+        except jwt.JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
         
-        user_id = payload['user_id']
+        try:
+            from rag_engine import get_rag_agent
+        except ImportError:
+            raise HTTPException(
+                status_code=500,
+                detail="RAG engine not initialized. Run: python setup_vectordb.py"
+            )
+        
+        # Generate session ID if not provided
         session_id = message.session_id or str(uuid.uuid4())
         
         # Get chat history for this session
         chat_history = []
-        if session_id:
+        try:
+            # Query by session_id (ChromaDB requires single where condition)
             history_results = chats_collection.get(
-                where={"user_id": user_id, "session_id": session_id}
+                where={"session_id": session_id}
             )
             if history_results['ids']:
                 for i in range(len(history_results['ids'])):
                     metadata = history_results['metadatas'][i]
-                    chat_history.append({
-                        "role": "user",
-                        "content": metadata['user_message']
-                    })
-                    chat_history.append({
-                        "role": "assistant",
-                        "content": metadata['bot_response']
-                    })
+                    # Only add if belongs to same user
+                    if metadata.get('user_id') == user_id:
+                        chat_history.append({
+                            "role": "user",
+                            "content": metadata['user_message']
+                        })
+                        chat_history.append({
+                            "role": "assistant",
+                            "content": metadata['bot_response']
+                        })
+        except Exception as e:
+            print(f"Warning: Could not retrieve chat history: {e}")
+            chat_history = []
         
         # Use RAG agent to generate response
         agent = get_rag_agent()
@@ -203,23 +242,58 @@ async def chat(message: ChatMessage, payload: dict = Depends(verify_token)):
         
         # Store chat
         chat_id = str(uuid.uuid4())
-        chats_collection.add(
-            ids=[chat_id],
-            documents=[message.message],
-            metadatas=[{
-                "user_id": user_id,
-                "session_id": session_id,
-                "user_message": message.message,
-                "bot_response": response_text,
-                "timestamp": datetime.utcnow().isoformat()
-            }]
-        )
+        try:
+            chats_collection.add(
+                ids=[chat_id],
+                documents=[message.message],
+                metadatas=[{
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "user_message": message.message,
+                    "bot_response": response_text,
+                    "timestamp": datetime.utcnow().isoformat()
+                }]
+            )
+        except Exception as e:
+            print(f"Warning: Could not store chat: {e}")
         
         return ChatResponse(
             response=response_text,
             sources=sources,
             session_id=session_id
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+@app.get("/api/chat/history/{session_id}")
+async def get_session_chat_history(session_id: str, payload: dict = Depends(verify_token)):
+    """Get chat history for a specific session (requires auth)"""
+    try:
+        user_id = payload['user_id']
+        # Query by session_id only
+        results = chats_collection.get(where={"session_id": session_id})
+        
+        chats = []
+        if results['ids']:
+            for i, chat_id in enumerate(results['ids']):
+                metadata = results['metadatas'][i]
+                # Filter by user_id to prevent accessing other users' chats
+                if metadata.get('user_id') == user_id:
+                    chats.append({
+                        "id": chat_id,
+                        "user_message": metadata['user_message'],
+                        "bot_response": metadata['bot_response'],
+                        "sources": metadata.get('sources', []),
+                        "timestamp": metadata['timestamp']
+                    })
+        
+        # Sort by timestamp (oldest first)
+        chats.sort(key=lambda x: x['timestamp'])
+        return {"session_id": session_id, "chats": chats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -5,11 +5,19 @@ Run this once to create your vector database from NELFUND documents
 
 import os
 import sys
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def check_prerequisites():
@@ -51,7 +59,7 @@ def check_prerequisites():
         import chromadb
         print("✓ Required packages installed")
     except ImportError as e:
-        errors.append(f"❌ Missing package: {e.name}")
+        errors.append(f"❌ Missing package: {e}")
     
     print()
     
@@ -68,8 +76,13 @@ def check_prerequisites():
 
 def setup_vector_database():
     """Main setup function"""
-    from document_processor import NELFUNDDocumentProcessor
-    from vector_store import NELFUNDVectorStore
+    try:
+        from document_processor import NELFUNDDocumentProcessor
+        from vector_store import NELFUNDVectorStore, VectorStoreConfig
+    except ImportError as e:
+        print(f"❌ Error importing modules: {e}")
+        print("Make sure document_processor.py and vector_store.py are in the same directory.")
+        return False
     
     print("\n" + "="*80)
     print("NELFUND VECTOR DATABASE SETUP")
@@ -78,65 +91,82 @@ def setup_vector_database():
     # Step 1: Load documents
     print("STEP 1: Loading NELFUND Documents")
     print("-" * 80)
-    processor = NELFUNDDocumentProcessor(data_directory="./data")
     
     try:
+        processor = NELFUNDDocumentProcessor(data_directory="./data")
         documents = processor.load_documents()
+        print(f"✓ Loaded {len(documents)} document pages")
     except Exception as e:
-        print(f"❌ Error loading documents: {e}")
+        logger.error(f"Error loading documents: {e}")
         return False
     
     # Step 2: Chunk documents
     print("\nSTEP 2: Chunking Documents")
     print("-" * 80)
-    chunks = processor.chunk_documents(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
     
-    # Show statistics
-    stats = processor.get_document_stats()
-    print(f"\n📊 Document Statistics:")
-    print(f"   Total Pages: {stats['total_documents']}")
-    print(f"   Total Chunks: {stats['total_chunks']}")
-    print(f"   Total Characters: {stats['total_characters']:,}")
-    print(f"   Avg Document Length: {stats['avg_doc_length']:,} characters")
-    
-    # Preview sample chunk
-    if chunks:
-        print("\n📄 Sample Chunk Preview:")
-        print("-" * 80)
-        sample = chunks[0]
-        print(f"Source: {sample.metadata.get('source', 'unknown')}")
-        print(f"Page: {sample.metadata.get('page', 'unknown')}")
-        print(f"Length: {len(sample.page_content)} chars")
-        print(f"\nContent:\n{sample.page_content[:300]}...")
-        print("-" * 80)
+    try:
+        chunks = processor.chunk_documents(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+        print(f"✓ Created {len(chunks)} chunks")
+        
+        # Show statistics
+        stats = processor.get_document_stats()
+        print(f"\n📊 Document Statistics:")
+        print(f"   Total Pages: {stats['total_documents']}")
+        print(f"   Total Chunks: {stats['total_chunks']}")
+        print(f"   Total Characters: {stats['total_characters']:,}")
+        print(f"   Avg Document Length: {stats['avg_doc_length']:,} characters")
+        
+        # Preview sample chunk
+        if chunks:
+            print("\n📄 Sample Chunk Preview:")
+            print("-" * 80)
+            sample = chunks[0]
+            print(f"Source: {sample.metadata.get('source', 'unknown')}")
+            print(f"Page: {sample.metadata.get('page', 'unknown')}")
+            print(f"Length: {len(sample.page_content)} chars")
+            print(f"\nContent:\n{sample.page_content[:300]}...")
+            print("-" * 80)
+    except Exception as e:
+        logger.error(f"Error chunking documents: {e}")
+        return False
     
     # Step 3: Create vector store
     print("\nSTEP 3: Creating Vector Database")
     print("-" * 80)
     print("This will embed all chunks using OpenAI...")
-    print("(This may take 1-2 minutes depending on document size)\n")
-    
-    vector_store = NELFUNDVectorStore(
-        persist_directory="./chroma_db",
-        collection_name="nelfund_docs"
-    )
+    print("(This may take 2-5 minutes depending on document size)\n")
     
     try:
         # Check if vector store already exists
+        force_recreate = True
         if os.path.exists("./chroma_db"):
             print("⚠️  Vector database already exists!")
             response = input("Do you want to recreate it? (y/n): ").lower()
             force_recreate = response == 'y'
-        else:
-            force_recreate = True
+            if not force_recreate:
+                print("Using existing vector database.")
         
+        # Create config
+        config = VectorStoreConfig(
+            persist_directory="./chroma_db",
+            collection_name="nelfund_docs",
+            embedding_model="text-embedding-3-small",  # Using small for faster, cheaper embedding
+            request_timeout=60.0,
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+        
+        # Initialize vector store with config
+        vector_store = NELFUNDVectorStore(config=config)
         vector_store.create_vectorstore(chunks, force_recreate=force_recreate)
         
     except Exception as e:
-        print(f"❌ Error creating vector store: {e}")
+        logger.error(f"Error creating vector store: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     
     # Step 4: Test the vector store
@@ -152,11 +182,15 @@ def setup_vector_database():
     print("Running test searches...\n")
     
     for query in test_queries:
-        print(f"🔍 Test: '{query}'")
-        results = vector_store.similarity_search(query, k=2)
-        print(f"   ✓ Found {len(results)} relevant chunks")
-        if results:
-            print(f"   Top result: {results[0].page_content[:100]}...")
+        try:
+            print(f"🔍 Query: '{query}'")
+            results = vector_store.similarity_search(query, k=2)
+            print(f"   ✓ Found {len(results)} relevant chunks")
+            if results:
+                preview = results[0].page_content[:100].replace('\n', ' ')
+                print(f"   Preview: {preview}...")
+        except Exception as e:
+            logger.error(f"Search test failed: {e}")
         print()
     
     return True
@@ -182,7 +216,7 @@ def main():
     print("   2. Split them into optimized chunks")
     print("   3. Create embeddings using OpenAI")
     print("   4. Save to ./chroma_db directory")
-    print("\nNote: This will use OpenAI API credits (approximately $0.01-0.10)")
+    print("\nNote: This will use OpenAI API credits (approximately $0.01-0.05)")
     print()
     
     response = input("Continue? (y/n): ").lower()
@@ -201,6 +235,7 @@ def main():
         print("\nYour vector database is ready!")
         print(f"   Location: ./chroma_db")
         print(f"   Collection: nelfund_docs")
+        print(f"   Total chunks: Check the output above")
         print("\nNext steps:")
         print("   1. Test the RAG engine: python rag_engine.py")
         print("   2. Start the API server: uvicorn main:app --reload")

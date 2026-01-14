@@ -8,16 +8,21 @@ bcrypt==4.1.2
 PyJWT==2.8.0
 
 # LangChain & AI
-langchain==0.1.4
-langchain-openai==0.0.5
-langchain-community==0.0.16
+langchain>=0.1.16,<0.2
+langchain-openai>=0.1.7
+langchain-community>=0.0.38
 langgraph==0.0.20
-openai==1.10.0
+openai>=1.6.0
 
 # Vector Database
-chromadb==0.4.22
-sentence-transformers==2.3.1
+# Vector Database
+chromadb>=0.5.0
+sentence-transformers>=2.6.0
 
+# OpenTelemetry (Updated to match newer Chroma)
+opentelemetry-api==1.25.0
+opentelemetry-sdk==1.25.0
+opentelemetry-exporter-otlp==1.25.0
 # Document Processing
 pypdf==3.17.4
 python-docx==1.1.0
