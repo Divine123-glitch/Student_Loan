@@ -213,7 +213,7 @@ const ChatInterface = () => {
               <div
                 key={session.session_id}
                 className={`p-3 rounded-lg ${hoverBg} cursor-pointer transition-colors group relative ${
-                  session.session_id === currentSessionId ? 'bg-indigo-600 text-white' : ''
+                  session.session_id === currentSessionId ? 'bg-green-600 text-white' : ''
                 }`}
                 onClick={() => selectSession(session.session_id)}
               >
@@ -284,9 +284,9 @@ const ChatInterface = () => {
               <div className="text-center">
                 <div className="flex justify-center mb-4">
                   <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                   </div>
                 </div>
                 <p>Loading chat history...</p>
@@ -324,7 +324,7 @@ const ChatInterface = () => {
                 <div key={index} className={`mb-6 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
                   <div className={`inline-block max-w-[80%] ${
                     message.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm'
+                      ? 'bg-green-600 text-white rounded-2xl rounded-tr-sm'
                       : `${secondaryBg} rounded-2xl rounded-tl-sm border ${borderColor}`
                   } p-4 shadow-sm`}>
                     <div className="whitespace-pre-wrap">{message.content}</div>
@@ -345,9 +345,9 @@ const ChatInterface = () => {
                 <div className="mb-6 text-left">
                   <div className={`inline-block ${secondaryBg} rounded-2xl rounded-tl-sm border ${borderColor} p-4`}>
                     <div className="flex space-x-2">
-                      <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-green-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                     </div>
                   </div>
                 </div>
@@ -374,7 +374,7 @@ const ChatInterface = () => {
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
-                className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-green-600 text-white p-3 rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />
               </button>
