@@ -1,2 +1,5 @@
 backend/.env
 backend/NEL/
+generate_presentation.py
+presentation.html
+~$NELFUND_Navigator_Presentation.pptx

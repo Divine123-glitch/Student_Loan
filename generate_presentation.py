@@ -13,9 +13,9 @@ prs = Presentation()
 prs.slide_width = Inches(10)
 prs.slide_height = Inches(7.5)
 
-# Define colors
-PURPLE_DARK = RGBColor(102, 126, 234)  # #667eea
-PURPLE_LIGHT = RGBColor(118, 75, 162)  # #764ba2
+
+PURPLE_DARK = RGBColor(102, 126, 234)  
+PURPLE_LIGHT = RGBColor(118, 75, 162) 
 WHITE = RGBColor(255, 255, 255)
 DARK_GRAY = RGBColor(51, 51, 51)
 LIGHT_GRAY = RGBColor(85, 85, 85)
